@@ -8,26 +8,40 @@ const registerUser = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
 
-    const userExists = await User.findOne({ email });
+    // Normalize email
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const userExists = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (userExists) {
       res.status(400);
       throw new Error('User already exists');
     }
 
-    // Role validation: normally Super Admin is created via seed script, but for now allow it.
-    const allowedRoles = ['Super Admin', 'Loan Manager', 'Loan Officer', 'Customer'];
-    const assignedRole = allowedRoles.includes(role) ? role : 'Customer';
+    // Allowed roles
+    const allowedRoles = [
+      'Super Admin',
+      'Loan Manager',
+      'Loan Officer',
+      'Customer',
+    ];
+
+    const assignedRole = allowedRoles.includes(role)
+      ? role
+      : 'Customer';
 
     const user = await User.create({
       name,
-      email,
+      email: normalizedEmail,
       password,
       role: assignedRole,
     });
 
     if (user) {
       generateToken(res, user._id, user.role);
+
       res.status(201).json({
         _id: user._id,
         name: user.name,
@@ -50,11 +64,29 @@ const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    // Validate input
+    if (!email || !password) {
+      res.status(400);
+      throw new Error('Email and password are required');
+    }
 
-    if (user && user.isActive && (await user.matchPassword(password))) {
+    // Normalize email
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Find user
+    const user = await User.findOne({
+      email: normalizedEmail,
+    });
+
+    // Check user, active status and password
+    if (
+      user &&
+      user.isActive &&
+      (await user.matchPassword(password))
+    ) {
       generateToken(res, user._id, user.role);
-      res.json({
+
+      res.status(200).json({
         _id: user._id,
         name: user.name,
         email: user.email,
@@ -77,7 +109,10 @@ const logoutUser = (req, res) => {
     httpOnly: true,
     expires: new Date(0),
   });
-  res.status(200).json({ message: 'Logged out successfully' });
+
+  res.status(200).json({
+    message: 'Logged out successfully',
+  });
 };
 
 // @desc    Get user profile
@@ -88,7 +123,7 @@ const getUserProfile = async (req, res, next) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
-      res.json({
+      res.status(200).json({
         _id: user._id,
         name: user.name,
         email: user.email,
